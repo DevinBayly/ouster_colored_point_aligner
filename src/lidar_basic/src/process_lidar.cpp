@@ -18,12 +18,11 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <cmath>
 
-
 #include <pcl/point_types.h>
 #include <pcl/pcl_macros.h>
 
-
-struct EIGEN_ALIGN16 Point {
+struct EIGEN_ALIGN16 Point
+{
     PCL_ADD_POINT4D;
     float intensity;
     uint32_t t;
@@ -62,9 +61,15 @@ void processLidarMeasurement(const sensor_msgs::PointCloud2ConstPtr &cloud_msg)
 int main(int argc, char **argv)
 {
     // initialise the node
-
+    std::string param;
+    ros::init(argc, argv, "node_name");
+    ros::NodeHandle nh("~");
+    nh.getParam("param", param);
+    param = param.substr(1,param.length());
+    ROS_INFO("Got parameter : %s", param.c_str());
+    std::cout << param << std::endl;
     // Specify the path to your ROS bag file
-    std::string bag_file_path = "88-transform.bag";
+    std::string bag_file_path = param+"-transform.bag";
 
     // Open the bag file for reading
     rosbag::Bag bag;
@@ -118,7 +123,7 @@ int main(int argc, char **argv)
     // access the -pc bag and use the map
     {
         std::cout << "made it to the next part" <<std::endl;
-        std::string bag_file_path = "88-pc.bag";
+        std::string bag_file_path = param+"-pc.bag";
 
         // Open the bag file for reading
         rosbag::Bag bag_pc;
@@ -141,6 +146,10 @@ int main(int argc, char **argv)
         // Loop through the messages in the bag
         for (rosbag::MessageInstance const &msg : view)
         {
+            i++;
+            if (i>10) {
+                break;
+            }
             sensor_msgs::PointCloud2::ConstPtr pc_msg = msg.instantiate<sensor_msgs::PointCloud2>();
             if (pc_msg != nullptr)
             {
