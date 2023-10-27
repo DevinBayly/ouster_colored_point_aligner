@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(lidar_basic)
+find_package(catkin REQUIRED COMPONENTS roscpp pcl_ros pcl_conversions std_msgs geometry_msgs tf nav_msgs)
+catkin_package()
+include_directories(include ${catkin_INCLUDE_DIRS})
+add_executable(process_lidar src/process_lidar.cpp)
+target_link_libraries(process_lidar ${catkin_LIBRARIES})
