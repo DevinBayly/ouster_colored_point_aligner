@@ -147,9 +147,7 @@ int main(int argc, char **argv)
         for (rosbag::MessageInstance const &msg : view)
         {
             i++;
-            if (i>10) {
-                break;
-            }
+            
             sensor_msgs::PointCloud2::ConstPtr pc_msg = msg.instantiate<sensor_msgs::PointCloud2>();
             if (pc_msg != nullptr)
             {
