@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     ROS_INFO("Got parameter : %s", param.c_str());
     std::cout << param << std::endl;
     // Specify the path to your ROS bag file
-    std::string bag_file_path = param+"-transform.bag";
+    std::string bag_file_path = param+"-transforms.bag";
 
     // Open the bag file for reading
     rosbag::Bag bag;
