@@ -11,6 +11,8 @@
 #include <std_msgs/Int32.h>
 #include "ros/ros.h"
 #include <iostream>
+#include <algorithm>
+#include <vector>
 #include "pcl/point_cloud.h"
 #include <pcl/io/pcd_io.h>
 #include "pcl_conversions/pcl_conversions.h"
@@ -69,7 +71,7 @@ int main(int argc, char **argv)
     ROS_INFO("Got parameter : %s", param.c_str());
     std::cout << param << std::endl;
     // Specify the path to your ROS bag file
-    std::string bag_file_path = param+"-transforms.bag";
+    std::string bag_file_path = param+"-transform.bag";
 
     // Open the bag file for reading
     rosbag::Bag bag;
@@ -85,38 +87,22 @@ int main(int argc, char **argv)
 
     // Define a topic filter to read only TF2 messages
     std::vector<std::string> topics;
-    topics.push_back("/aft_mapped_path");
+    topics.push_back("/tf");
     rosbag::View view(bag, rosbag::TopicQuery(topics));
 
-    std::map<double, geometry_msgs::Pose> map;
+    std::vector<geometry_msgs::Transform> map;
     // Loop through the messages in the bag
     for (rosbag::MessageInstance const &msg : view)
     {
-        nav_msgs::Path::ConstPtr pth_msg = msg.instantiate<nav_msgs::Path>();
-        if (pth_msg != nullptr)
-        {
-            // Process TF2 message here
-            for (geometry_msgs::PoseStamped posestamped : pth_msg->poses)
-            {
-                geometry_msgs::Pose pose = posestamped.pose;
-                // Access transform data
-                // std::string child_frame_id = transform.child_frame_id;
-                // std::string frame_id = transform.header.frame_id;
-                // geometry_msgs::Transform transform_data = transform.transform;
-                //// You can use the transform data as needed
-                //// For example, you can access translation and rotation components
-                // geometry_msgs::Vector3 translation = transform_data.translation;
-                // geometry_msgs::Quaternion rotation = transform_data.rotation;
-                //// Process the TF2 message data here
-                //// ...
-
-                // std::cout << "got message" << std::endl;
-                // std::cout << posestamped.header.stamp << std::endl;
-                // std::string frame_id = posestamped.header.frame_id;
-                // std::cout << frame_id << std::endl;
-                // std::cout << pose.position << std::endl;
-                // std::cout << pose.orientation << std::endl;
-                map[round(double(posestamped.header.stamp.sec) * 10.0) / 10.0] = pose;
+        tf2_msgs::TFMessage::ConstPtr tf_message = msg.instantiate<tf2_msgs::TFMessage>();
+        if (tf_message != nullptr) {
+            // Process the TF message
+            // You can access TF transform data from tf_message->transforms
+            for (const geometry_msgs::TransformStamped& transform : tf_message->transforms) {
+                // Access transform information like transform.child_frame_id, transform.header, etc.
+                // For example:
+                ROS_INFO("Frame ID: %s", transform.child_frame_id.c_str());
+                map.push_back(transform.transform);
             }
         }
     }
@@ -142,15 +128,17 @@ int main(int argc, char **argv)
         std::vector<std::string> topics;
         topics.push_back("/ouster/points");
         rosbag::View view(bag_pc, rosbag::TopicQuery(topics));
-
+        // reverse the map so that we can pop the front items
+        //std::reverse(map.begin(),map.end());
         // Loop through the messages in the bag
+        std::ofstream ofile("transforms");
+        ofile << "w,x,y,z,px,py,pz\n";
         for (rosbag::MessageInstance const &msg : view)
         {
-            i++;
-            
             sensor_msgs::PointCloud2::ConstPtr pc_msg = msg.instantiate<sensor_msgs::PointCloud2>();
             if (pc_msg != nullptr)
             {
+                
                 std::cout << "Received lidar measurement with seq ID " << pc_msg->header.seq << std::endl;
                 std::cout << "Received lidar measurement with time " << pc_msg->header.stamp << std::endl;
                 double rounded_time = round(double(pc_msg->header.stamp.sec) * 10.0) / 10.0;
@@ -160,30 +148,32 @@ int main(int argc, char **argv)
                 // make an output cloud that
                 pcl::PointCloud<Point> laserCloudOut;
                 // get the transform information for using position and orientation to move the point cloud
-                geometry_msgs::Pose p = map[rounded_time];
-                Eigen::Quaterniond eigenQ = Eigen::Quaterniond(p.orientation.w,p.orientation.x,p.orientation.y,p.orientation.z);
+                geometry_msgs::Transform p = map[i];
+                Eigen::Quaterniond eigenQ(p.rotation.w,p.rotation.x,p.rotation.y,p.rotation.z);
+                Eigen::Vector3d pos( p.translation.x, p.translation.y, p.translation.z);
+                ofile <<p.rotation.w << ",";
+                ofile <<p.rotation.x<< ",";
+                ofile <<p.rotation.y<< ",";
+                ofile <<p.rotation.z<< ",";
+                ofile <<p.translation.x<< ",";
+                ofile <<p.translation.y<< ",";
+                ofile <<p.translation.z<< "\n";
                 Eigen::Affine3d transform = Eigen::Affine3d::Identity();
-                Eigen::Vector3d pos(p.position.x,p.position.y,p.position.z);
                 transform.translation() = pos;
                 transform.rotate(eigenQ);
 
                 pcl::transformPointCloud(laserCloudIn, laserCloudOut, transform);
                 pcl::io::savePCDFileBinary(std::to_string(pc_msg->header.seq) + "_test_pcd.pcd", laserCloudOut);
+                i++;
             }
         }
+        ofile.close();
         bag_pc.close();
     }
 
     // Close the bag file
     bag.close();
 
-    // ros::init(argc, argv, "process_lidar");
-
-    // std::cout << "Process_lidar node initialised" << std::endl;
-    // // handle ROS communication events
-    // ros::NodeHandle n;
-    // ros::Subscriber sub = n.subscribe("/ouster/points", 1000, processLidarMeasurement);
-    // ros::spin();
 
     return 0;
 }
